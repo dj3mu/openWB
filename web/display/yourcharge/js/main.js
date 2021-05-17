@@ -30,7 +30,7 @@ function lockDisplay(lock = true) {
   }
 }
 //!!!! IMPLEMENT LATER
-// lockDisplay();
+lockDisplay();
 //!!!! IMPLEMENT LATER
 $("#lockModal,#changeLockModal,#changeDisplayTimeoutModal").on(
   "hidden.bs.modal",
