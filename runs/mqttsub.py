@@ -113,7 +113,7 @@ def on_message(client, userdata, msg):
                     elif ( int(devicenumb) == 2 ):
                         soctimerfile = '/var/www/html/openWB/ramdisk/soctimer1'
                     f = open(soctimerfile, 'w')
-                    f.write("20000")
+                    f.write("20005")
                     f.close()
             if (( "openWB/config/set/SmartHome/Device" in msg.topic) and ("device_configured" in msg.topic)):
                 devicenumb=re.sub(r'\D', '', msg.topic)
@@ -313,6 +313,36 @@ def on_message(client, userdata, msg):
                 if ( 1 <= int(devicenumb) <= numberOfSupportedDevices and 0 <= int(msg.payload) <= 9000 ):
                     writetoconfig(shconfigfile,'smarthomedevices','device_acthorpower_'+str(devicenumb), msg.payload.decode("utf-8"))
                     client.publish("openWB/config/get/SmartHome/Devices/"+str(devicenumb)+"/device_acthorpower", msg.payload.decode("utf-8"), qos=0, retain=True)
+
+            if (( "openWB/config/set/SmartHome/Device" in msg.topic) and ("device_finishTime" in msg.topic)):
+                devicenumb=re.sub(r'\D', '', msg.topic)
+                if ( 1 <= int(devicenumb) <= numberOfSupportedDevices and re.search(r'^([01]{0,1}\d|2[0-3]):[0-5]\d$', msg.payload.decode("utf-8") ) ):
+                    writetoconfig(shconfigfile,'smarthomedevices','device_finishtime_'+str(devicenumb), msg.payload.decode("utf-8"))
+                    client.publish("openWB/config/get/SmartHome/Devices/"+str(devicenumb)+"/device_finishTime", msg.payload.decode("utf-8"), qos=0, retain=True)
+                else:
+                    print( "invalid payload for topic '" + msg.topic + "': " + msg.payload.decode("utf-8"))
+            if (( "openWB/config/set/SmartHome/Device" in msg.topic) and ("device_startupDetection" in msg.topic)):
+                devicenumb=re.sub(r'\D', '', msg.topic)
+                if ( 1 <= int(devicenumb) <= numberOfSupportedDevices and 0 <= int(msg.payload) <= 1 ):
+                    writetoconfig(shconfigfile,'smarthomedevices','device_startupdetection_'+str(devicenumb), msg.payload.decode("utf-8"))
+                    client.publish("openWB/config/get/SmartHome/Devices/"+str(devicenumb)+"/device_startupDetection", msg.payload.decode("utf-8"), qos=0, retain=True)
+                else:
+                    print( "invalid payload for topic '" + msg.topic + "': " + msg.payload.decode("utf-8"))
+            if (( "openWB/config/set/SmartHome/Device" in msg.topic) and ("device_standbyPower" in msg.topic)):
+                devicenumb=re.sub(r'\D', '', msg.topic)
+                if ( 1 <= int(devicenumb) <= numberOfSupportedDevices and 0 <= int(msg.payload) <= 1000 ):
+                    writetoconfig(shconfigfile,'smarthomedevices','device_standbypower_'+str(devicenumb), msg.payload.decode("utf-8"))
+                    client.publish("openWB/config/get/SmartHome/Devices/"+str(devicenumb)+"/device_standbyPower", msg.payload.decode("utf-8"), qos=0, retain=True)
+                else:
+                    print( "invalid payload for topic '" + msg.topic + "': " + msg.payload.decode("utf-8"))
+            if (( "openWB/config/set/SmartHome/Device" in msg.topic) and ("device_standbyDuration" in msg.topic)):
+                devicenumb=re.sub(r'\D', '', msg.topic)
+                if ( 1 <= int(devicenumb) <= numberOfSupportedDevices and 0 <= int(msg.payload) <= 86400 ):
+                    writetoconfig(shconfigfile,'smarthomedevices','device_standbyduration_'+str(devicenumb), msg.payload.decode("utf-8"))
+                    client.publish("openWB/config/get/SmartHome/Devices/"+str(devicenumb)+"/device_standbyDuration", msg.payload.decode("utf-8"), qos=0, retain=True)
+                else:
+                    print( "invalid payload for topic '" + msg.topic + "': " + msg.payload.decode("utf-8"))
+
             if (msg.topic == "openWB/config/set/SmartHome/maxBatteryPower"):
                 if (0 <= int(msg.payload) <= 10000):
                     f = open('/var/www/html/openWB/ramdisk/smarthomehandlermaxbatterypower', 'w')
@@ -339,6 +369,61 @@ def on_message(client, userdata, msg):
                     f = open('/var/www/html/openWB/ramdisk/manual_soc_lp'+str(devicenumb), 'w')
                     f.write(msg.payload.decode("utf-8"))
                     f.close()
+                    client.publish("openWB/lp/"+str(devicenumb)+"/%Soc", msg.payload.decode("utf-8"), qos=0, retain=True)
+                    if ( int(devicenumb) == 1 ):
+                        socFile = '/var/www/html/openWB/ramdisk/soc'
+                    elif ( int(devicenumb) == 2 ):
+                        socFile = '/var/www/html/openWB/ramdisk/soc1'
+                    f = open(socFile, 'w')
+                    f.write(msg.payload.decode("utf-8"))
+                    f.close()
+            if (( "openWB/config/set/sofort/lp" in msg.topic) and ("energyToCharge" in msg.topic)):
+                devicenumb=re.sub(r'\D', '', msg.topic)
+                if ( 1 <= int(devicenumb) <= 8 and 0 <= int(msg.payload) <= 100):
+                    if ( int(devicenumb) == 1):
+                        sendcommand = ["/var/www/html/openWB/runs/replaceinconfig.sh", "lademkwh=", msg.payload.decode("utf-8")]
+                        subprocess.run(sendcommand)
+                    if (int(devicenumb) == 2):
+                        sendcommand = ["/var/www/html/openWB/runs/replaceinconfig.sh", "lademkwhs1=", msg.payload.decode("utf-8")]
+                        subprocess.run(sendcommand)
+                    if (int(devicenumb) == 3):
+                        sendcommand = ["/var/www/html/openWB/runs/replaceinconfig.sh", "lademkwhs2=", msg.payload.decode("utf-8")]
+                        subprocess.run(sendcommand)
+                    if (int(devicenumb) >= 4):
+                        sendcommand = ["/var/www/html/openWB/runs/replaceinconfig.sh", "lademkwhlp"+str(devicenumb)+"=", msg.payload.decode("utf-8")]
+                        subprocess.run(sendcommand)
+                    client.publish("openWB/config/get/sofort/lp/"+str(devicenumb)+"/energyToCharge", msg.payload.decode("utf-8"), qos=0, retain=True)
+            if (( "openWB/config/set/sofort/lp" in msg.topic) and ("resetEnergyToCharge" in msg.topic)):
+                devicenumb=re.sub(r'\D', '', msg.topic)
+                if ( 1 <= int(devicenumb) <= 8 and int(msg.payload) == 1):
+                    if ( int(devicenumb) == 1):
+                        f = open('/var/www/html/openWB/ramdisk/aktgeladen', 'w')
+                        f.write("0")
+                        f.close()
+                        f = open('/var/www/html/openWB/ramdisk/gelrlp1', 'w')
+                        f.write("0")
+                        f.close()
+                    if (int(devicenumb) == 2):
+                        f = open('/var/www/html/openWB/ramdisk/aktgeladens1', 'w')
+                        f.write("0")
+                        f.close()
+                        f = open('/var/www/html/openWB/ramdisk/gelrlp2', 'w')
+                        f.write("0")
+                        f.close()
+                    if (int(devicenumb) == 3):
+                        f = open('/var/www/html/openWB/ramdisk/aktgeladens2', 'w')
+                        f.write("0")
+                        f.close()
+                        f = open('/var/www/html/openWB/ramdisk/gelrlp3', 'w')
+                        f.write("0")
+                        f.close()
+                    if (int(devicenumb) >= 4):
+                        f = open('/var/www/html/openWB/ramdisk/aktgeladenlp'+str(devicenumb), 'w')
+                        f.write("0")
+                        f.close()
+                        f = open('/var/www/html/openWB/ramdisk/gelrlp'+str(devicenumb), 'w')
+                        f.write("0")
+                        f.close()
             if (( "openWB/config/set/sofort/lp" in msg.topic) and ("socToChargeTo" in msg.topic)):
                 devicenumb=re.sub(r'\D', '', msg.topic)
                 if ( 1 <= int(devicenumb) <= 2 and 0 <= int(msg.payload) <= 100):
@@ -613,6 +698,23 @@ def on_message(client, userdata, msg):
                     f.write(msg.payload.decode("utf-8"))
                     f.close()
                     setTopicCleared = True
+            if (msg.topic == "openWB/set/configure/FixedChargeCurrentCp2"):
+                if (int(msg.payload) >= -1 and int(msg.payload) <= 32):
+                    f = open('/var/www/html/openWB/ramdisk/FixedChargeCurrentCp2', 'w')
+                    f.write(msg.payload.decode("utf-8"))
+                    f.close()
+                    setTopicCleared = True
+            if (msg.topic == "openWB/set/configure/SlaveModeAllowedLoadImbalance"):
+                if (float(msg.payload) >= 0 and float(msg.payload) <= 200):
+                    f = open('/var/www/html/openWB/ramdisk/SlaveModeAllowedLoadImbalance', 'w')
+                    f.write(msg.payload.decode("utf-8"))
+                    f.close()
+                    setTopicCleared = True
+            if (msg.topic == "openWB/set/configure/AllowedRfidsForSocket"):
+                f = open('/var/www/html/openWB/ramdisk/AllowedRfidsForSocket', 'w')
+                f.write(msg.payload.decode("utf-8"))
+                f.close()
+                setTopicCleared = True
             if (msg.topic == "openWB/set/configure/AllowedRfidsForLp1"):
                 f = open('/var/www/html/openWB/ramdisk/AllowedRfidsForLp1', 'w')
                 f.write(msg.payload.decode("utf-8"))
@@ -670,6 +772,12 @@ def on_message(client, userdata, msg):
                     f.write(msg.payload.decode("utf-8"))
                     f.close()
                     setTopicCleared = True
+            if (msg.topic == "openWB/config/set/global/rfidConfigured"):
+                if (int(msg.payload) >= 0 and int(msg.payload) <=1):
+                    rfidMode=msg.payload.decode("utf-8")
+                    sendcommand = ["/var/www/html/openWB/runs/replaceinconfig.sh", "rfidakt=", rfidMode]
+                    subprocess.run(sendcommand)
+                    client.publish("openWB/global/rfidConfigured", rfidMode, qos=0, retain=True)
             if (msg.topic == "openWB/config/set/global/slaveMode"):
                 if (int(msg.payload) >= 0 and int(msg.payload) <=1):
                     slaveMode=msg.payload.decode("utf-8")
@@ -926,28 +1034,6 @@ def on_message(client, userdata, msg):
                     replaceAll("lademstats1=",msg.payload.decode("utf-8"))
                     replaceAll("sofortsocstatlp2=","0")
                 if (int(msg.payload) == 2):
-                    client.publish("openWB/lp/2/boolDirectChargeModeSoc", "1", qos=0, retain=True)
-                else:
-                    client.publish("openWB/lp/2/boolDirectChargeModeSoc", "0", qos=0, retain=True)
-                client.publish("openWB/config/get/sofort/lp/2/chargeLimitation", msg.payload.decode("utf-8"), qos=0, retain=True)
-            if (msg.topic == "openWB/set/lp/1/DirectChargeSubMode"):
-                if (int(msg.payload) == 0):
-                    replaceAll("lademstat=",msg.payload.decode("utf-8"))
-                    replaceAll("sofortsocstatlp1=",msg.payload.decode("utf-8"))
-                if (int(msg.payload) == 1):
-                    replaceAll("lademstat=",msg.payload.decode("utf-8"))
-                    replaceAll("sofortsocstatlp1=","0")
-                if (int(msg.payload) == 2):
-                    replaceAll("lademstat=","0")
-                    replaceAll("sofortsocstatlp1=","1")
-            if (msg.topic == "openWB/set/lp/2/DirectChargeSubMode"):
-                if (int(msg.payload) == 0):
-                    replaceAll("lademstats1=",msg.payload.decode("utf-8"))
-                    replaceAll("sofortsocstatlp2=",msg.payload.decode("utf-8"))
-                if (int(msg.payload) == 1):
-                    replaceAll("lademstats1=",msg.payload.decode("utf-8"))
-                    replaceAll("sofortsocstatlp2=","0")
-                if (int(msg.payload) == 2):
                     replaceAll("lademstats1=","0")
                     replaceAll("sofortsocstatlp2=","1")
             if (msg.topic == "openWB/set/lp/3/DirectChargeSubMode"):
@@ -1016,7 +1102,20 @@ def on_message(client, userdata, msg):
                     f.write(msg.payload.decode("utf-8"))
                     f.close()
             if (msg.topic == "openWB/set/isss/parentWB"):
+                f = open('/var/www/html/openWB/ramdisk/parentWB', 'w')
+                f.write(msg.payload.decode("utf-8"))
+                f.close()
                 client.publish("openWB/system/parentWB", msg.payload.decode("utf-8"), qos=0, retain=True)
+            if (msg.topic == "openWB/set/isss/parentCPlp1"):
+                client.publish("openWB/system/parentCPlp1", msg.payload.decode("utf-8"), qos=0, retain=True)
+                f = open('/var/www/html/openWB/ramdisk/parentCPlp1', 'w')
+                f.write(msg.payload.decode("utf-8"))
+                f.close()
+            if (msg.topic == "openWB/set/isss/parentCPlp2"):
+                client.publish("openWB/system/parentCPlp2", msg.payload.decode("utf-8"), qos=0, retain=True)
+                f = open('/var/www/html/openWB/ramdisk/parentCPlp2', 'w')
+                f.write(msg.payload.decode("utf-8"))
+                f.close()
             if (msg.topic == "openWB/set/awattar/MaxPriceForCharging"):
                 if (float(msg.payload) >= -50 and float(msg.payload) <=50):
                     f = open('/var/www/html/openWB/ramdisk/etprovidermaxprice', 'w')

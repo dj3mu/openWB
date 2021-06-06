@@ -43,7 +43,9 @@ glParams = {
         'lastMeterFile': '',
         'isChargingFile': '',
         'isPluggedFile': '',
-        'unplugFile': ''
+        'chargedFile': '',
+        'unplugFile': '',
+        'auxDataFile': ''
     },
     'args' : {
         'chargePoint': '',
@@ -126,19 +128,22 @@ def renderFileNames(ramDiskDir):
         glParams['files']['lastRunFile'] = ramDiskDir + "/soc_kia_lp" + glParams['args']['chargePoint'] + "_lastrun"
         glParams['files']['lastTickFile'] = ramDiskDir + "/soc_kia_lp" + glParams['args']['chargePoint'] + "_lasttick"
         glParams['files']['lastMeterFile'] = ramDiskDir + "/soc_kia_lp" + glParams['args']['chargePoint'] + "_lastmeter"
-        glParams['files']['isChargingFile'] = ramDiskDir + "/ladungaktivlp" + glParams['args']['chargePoint']
+        glParams['files']['chargedFile'] = ramDiskDir + "/soc_kia_lp" + glParams['args']['chargePoint'] + "_charged"
         glParams['files']['unplugFile'] = ramDiskDir + "/soc_kia_lp" + glParams['args']['chargePoint'] + "_unplug"
+        glParams['files']['auxDataFile'] = ramDiskDir + "/soc_kia_lp" + glParams['args']['chargePoint'] + "_auxdata"
         
         if glParams['args']['chargePoint'] == '1':
             glParams['files']['currentSocFile'] = ramDiskDir + "/soc"
             glParams['files']['timerFile'] = ramDiskDir + "/soctimer"
             glParams['files']['meterFile'] = ramDiskDir + "/llkwh"
             glParams['files']['isPluggedFile'] = ramDiskDir + "/plugstat"
+            glParams['files']['isChargingFile'] = ramDiskDir + "/chargestat"
         elif glParams['args']['chargePoint'] == '2':
             glParams['files']['currentSocFile'] = ramDiskDir + "/soc1"
             glParams['files']['timerFile'] = ramDiskDir + "/soctimer1"
             glParams['files']['meterFile'] = ramDiskDir + "/llkwhs1"
             glParams['files']['isPluggedFile'] = ramDiskDir + "/plugstats1"
+            glParams['files']['isChargingFile'] = ramDiskDir + "/chargestats1"
         else:
             raise RuntimeError
     except:
@@ -496,7 +501,10 @@ def getStatusCached(vehicleId):
     statusDict = {
         'time': 0,
         'socev': 0,
-        'soc12v':0
+        'soc12v': 0,
+        'vehicleLocation': '',
+        'vehicleStatus': '',
+        'odometer': ''
     }
     
     url = glParams['baseUrl'] + '/api/v2/spa/vehicles/' + vehicleId + '/status/latest'
@@ -516,6 +524,9 @@ def getStatusCached(vehicleId):
         statusDict['time'] = timeToStamp(responseDict['resMsg']['vehicleStatusInfo']['vehicleStatus']['time'])
         statusDict['socev'] = int(responseDict['resMsg']['vehicleStatusInfo']['vehicleStatus']['evStatus']['batteryStatus'])
         statusDict['soc12v'] = int(responseDict['resMsg']['vehicleStatusInfo']['vehicleStatus']['battery']['batSoc'])
+        statusDict['vehicleLocation'] = responseDict['resMsg']['vehicleStatusInfo']['vehicleLocation']
+        statusDict['vehicleStatus'] = responseDict['resMsg']['vehicleStatusInfo']['vehicleStatus']
+        statusDict['odometer'] = responseDict['resMsg']['vehicleStatusInfo']['odometer']
     except:
         logDebug(1, "Receiving cached status failed, invalid response")
         logDebug(2, response)
@@ -554,7 +565,8 @@ def getStatusFull(vehicleId):
     statusDict = {
         'time': 0,
         'socev': 0,
-        'soc12v':0
+        'soc12v': 0,
+        'vehicleStatus': ''
     }
     
     url = glParams['baseUrl'] + '/api/v2/spa/vehicles/' + vehicleId + '/status'
@@ -575,6 +587,7 @@ def getStatusFull(vehicleId):
         statusDict['time'] = timeToStamp(responseDict['resMsg']['time'])
         statusDict['socev'] = int(responseDict['resMsg']['evStatus']['batteryStatus'])
         statusDict['soc12v'] = int(responseDict['resMsg']['battery']['batSoc'])
+        statusDict['vehicleStatus'] = responseDict['resMsg']
     except:
         logDebug(1, "Receiving current status failed, invalid response")
         logDebug(2, response)
@@ -657,6 +670,12 @@ def requestNewControlToken(pin):
 def DownloadSoC(email, password, pin, vin):
     logDebug(0, "SoC download starting")
       
+    auxData = {
+        'vehicleLocation': '',
+        'vehicleStatus': '',
+        'odometer': ''
+    }
+    
     try:
         now = int(time.time())       
         setGlobalData(vin)
@@ -676,9 +695,16 @@ def DownloadSoC(email, password, pin, vin):
         status = getStatusCached(vehicleId)
     except:
         logDebug(0, "Collecting data from server failed")
-        raise 
+        raise
 
-    if (now - status['time']) < (glParams['cacheValid']):
+    try:
+        auxData['vehicleLocation'] = status['vehicleLocation']
+        auxData['vehicleStatus'] = status['vehicleStatus']
+        auxData['odometer'] = status['odometer']
+    except:
+        pass
+
+    if (now - status['time']) < (glParams['cacheValid']) and status['socev'] > 0:
         logDebug(2, "Cached data is current")
     else:
         if status['soc12v'] < glParams['soc12vLimit']:
@@ -691,6 +717,11 @@ def DownloadSoC(email, password, pin, vin):
         except:
             logDebug(0, "Collecting data from vehicle failed")
             raise
+        
+        try:
+            auxData['vehicleStatus'] = status['vehicleStatus']
+        except:
+            pass
     
     if status['soc12v'] >= 80:
         logDebug(2, "Received SoC (12 V-battery): " + str(status['soc12v']) + "%")
@@ -702,6 +733,13 @@ def DownloadSoC(email, password, pin, vin):
     soc = status['socev']
     logDebug(0, "Received SoC (HV-battery): " + str(soc) + "%")
     
+    try:
+        f = open(glParams['files']['auxDataFile'], 'w')
+        f.write(json.dumps(auxData))
+        f.close()
+    except:
+        pass
+        
     logDebug(1, "SoC download ending")
     
     return soc
@@ -713,15 +751,16 @@ def doExternalUpdate(email, password, pin, vin):
         try:
             soc = DownloadSoC(email, password, pin, vin)
         except:
-            raise
+            soc = 0
             
         if soc > 0:
             saveSoc(soc, 0)
             break
         else:
             attempt += 1
-            logDebug(2, "        Retrying in 60 Seconds...")
-            time.sleep(60)
+            if attempt < 3:
+                logDebug(2, "Retrying in 60 Seconds...")
+                time.sleep(60)
     
     return
     
@@ -822,7 +861,8 @@ def saveSoc(soc, manual):
         f.close()
         
         resetUnplugState()
-            
+        resetChargedState()
+        
     return
 
 #---------------Timer handling------------------------------------------
@@ -859,29 +899,7 @@ def isCharging():
         raise
 
     return chargeState
-    
-def wasCharging():
-    chargedState = 0
-    
-    try:
-        f = open(glParams['files']['meterFile'], 'r')
-        meter = float(f.read())
-        f.close()
-    except:
-        meter = 0
-
-    try:
-        f = open(glParams['files']['lastMeterFile'], 'r')
-        lastMeter = float(f.read())
-        f.close()
-    except:
-        lastMeter = 0    
-
-    if meter > lastMeter:
-        chargedState = 1
-
-    return chargedState
-
+       
 def isPlugged():
     plugState = 0
     
@@ -938,9 +956,34 @@ def saveUnplugState():
         f.close()        
         
     return
+    
+def saveChargedState():
+    chargedState = 0
+    
+    try:  
+        f = open(glParams['files']['isChargingFile'], 'r')
+        chargedState = int(f.read())
+        f.close()      
+    except:
+        raise
+        
+    
+    if chargedState == 1:
+        f = open(glParams['files']['chargedFile'], 'w')
+        f.write(str(chargedState))
+        f.close()        
+        
+    return
 
 def resetUnplugState():
     f = open(glParams['files']['unplugFile'], 'w')
+    f.write(str(0))
+    f.close()  
+
+    return
+    
+def resetChargedState():
+    f = open(glParams['files']['chargedFile'], 'w')
     f.write(str(0))
     f.close()  
 
@@ -957,6 +1000,18 @@ def wasUnplugged():
         unplugState = 1
     
     return unplugState
+
+def wasCharging():
+    chargedState = 1
+    
+    try:  
+        f = open(glParams['files']['chargedFile'], 'r')
+        chargedState = int(f.read())
+        f.close()    
+    except:
+        chargedState = 1
+    
+    return chargedState
     
 def isExternalTriggered():
     trigger = 0
@@ -1065,6 +1120,7 @@ def main():
 
     try:
         saveUnplugState()
+        saveChargedState()
         
         if isDownloadTriggered(args['timerInterval'], glParams['timerMinInterval']) == 1:
             doExternalUpdate(args['accountName'], args['accountPassword'], args['accountPin'], args['vehicleVin'])
